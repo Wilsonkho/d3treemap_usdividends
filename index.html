@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+    <link type="text/css" rel="stylesheet" href="style.css"/>
+    <script type="text/javascript" src="d3/d3.js"></script>
+    <script type="text/javascript" src="d3/d3.layout.js"></script>
+    <style type="text/css">
+
+.chart {
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 100px;
+  margin-right: 100px;
+  margin-left: 100px;
+}
+
+text {
+  font-size: 11px;
+}
+
+rect {
+  fill: none;
+}
+
+header {
+  font-size: 30px;
+  font-family: Georgia;
+  text-align: center;
+
+}
+
+#tooltip {
+  position: absolute;
+  width: 220px;
+  height: auto;
+  padding: 10px;
+  background-color: lightgrey;
+  border-radius: 10px;
+  box-shadow: 4px 4px 10px rgba(0,0,0,0.4);
+  pointer-events: none;
+}
+
+#tooltip.hidden{
+  display: none;
+}
+
+#tooltip p {
+  margin: 0;
+  font-family: sans-serif;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+    </style>
+  </head>
+  <body>
+    <div id="body">
+      <header><strong>US Dividend Champions Statistics</strong></header>
+       
+        <div class="hint">View Treemap by:</div>
+        <div><select>
+          <option value="annual">Aunnual Dividends</option>
+          <option value="eps">EPS</option>
+          <option value="gram">Graham</option>
+          <option value="nyg">NY %</option>
+        </select></div>
+      </div>
+    </div>
+    <script type="text/javascript">
+
+  var mousemove = function(d) {
+    var xPosition = d3.event.pageX + 5;
+    var yPosition = d3.event.pageY + 5;
+
+    d3.select("#tooltip")
+      .style("left",xPosition + "px")
+      .style("top", yPosition + "px");
+    d3.select("#tooltip #sector")
+      .text(d.parent.name + " (" + d.name + ")");
+    d3.select("#tooltip #annual")
+      .text("Annual Dividends: " + d.annual);
+    d3.select("#tooltip #eps")
+      .text("Earnings Per Share: " + d.eps)
+    d3.select("#tooltip #gram")
+      .text("Graham: " + d.gram);
+    d3.select("#tooltip #nyg")
+      .text("Next Year's Growth: " + d.nyg);
+    d3.select("#tooltip").classed("hidden",false);
+  };
+
+  var mouseout = function() {
+    d3.select("#tooltip").classed("hidden",true);
+  };
+
+var w = 1000 - 80,
+    h = 800 - 180,
+    x = d3.scale.linear().range([0, w]),
+    y = d3.scale.linear().range([0, h]),
+    color = d3.scale.category20(),
+    dstate = "annual",
+    root,
+    node;
+
+var treemap = d3.layout.treemap()
+    .round(false)
+    .size([w, h])
+    .sticky(true)
+    .value(function(d) { 
+      return Math.abs(d.annual); 
+    });
+
+
+var svg = d3.select("body").append("div")
+    .attr("class", "chart")
+    .style("width", w + "px")
+    .style("height", h + "px")
+  .append("svg:svg")
+    .attr("width", w)
+    .attr("height", h)
+  .append("svg:g")
+    .attr("transform", "translate(.5,.5)");
+
+//reads data file 
+d3.json("champion.json", function(data) {
+  node = root = data;
+
+  var nodes = treemap.nodes(root)
+      .filter(function(d) { return !d.children; });
+
+  //create sectors as cells
+  var cell = svg.selectAll("g")
+      .data(nodes)
+    .enter().append("svg:g")
+      .attr("class", "cell")
+      .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; })
+      .on("click", function(d) { return zoom(node == d.parent ? root : d.parent); });
+
+
+  //format and draw individual ticker rectangles
+  cell.append("svg:rect")
+      .attr("width", function(d) { return Math.abs(d.dx) - 2; })
+      .attr("height", function(d) { return Math.abs(d.dy) - 2; })
+      .style("fill", function(d) {
+        if ( d.nyg < 0 && dstate == "nyg" || d.gram < 0 && dstate == "gram")
+          return "black";
+        else 
+          return color(d.parent.name); 
+      })
+
+      //tool tip to view individual ticker information
+      .on("mouseover", function(d){
+        d3.select(this).style("fill", "grey");
+        })
+      .on("mousemove",mousemove)
+      .on("mouseout",mouseout)
+      .on("mouseout", function(d){d3.select(this).style("fill", function(d) { 
+        if (d.nyg < 0 && dstate == "nyg" || d.gram < 0 && dstate == "gram")
+          return "black";
+        else
+          return color(d.parent.name);}) 
+      });
+
+  //Fill Rectangle with Text
+  cell.append("svg:text")
+      .attr("x", function(d) { return Math.abs(d.dx) / 2; })
+      .attr("y", function(d) { return Math.abs(d.dy) / 2; })
+      .attr("dy", ".35em")
+      .attr("text-anchor", "middle")
+      .text(function(d) { return d.name; })
+      .style("opacity", function(d) { d.w = this.getComputedTextLength(); return Math.abs(d.dx) > d.w ? 1 : 0; });
+
+  //call zoom function on click
+  d3.select(window).on("click", function() { zoom(root); });
+
+  //check for combo box changes 
+  d3.select("select").on("change", function() {
+    //replace for more than just if then else statment
+    //treemap.value(this.value == "nyg" ? nyg : annual).nodes(root);
+    if (this.value=="nyg")
+      treemap.value(nyg).nodes(root);
+    else if (this.value=="annual")
+      treemap.value(annual).nodes(root);
+    else if (this.value=="eps")
+      treemap.value(eps).nodes(root);
+    else if (this.value=="gram")
+      treemap.value(gram).nodes(root);
+    zoom(node);
+  });
+});
+
+//call nyg field in json for treemap nodes
+function nyg(d) {
+  dstate = "nyg"
+  return Math.abs(d.nyg);
+}
+//call annual field in json for treemap nodes
+function annual(d) {
+  dstate = "annual"
+    return d.annual;
+}
+//call eps field in json for treemap nodes
+function eps(d){
+    dstate = "eps"
+    return d.eps;
+}
+//call gram field in json for treemap nodes
+function gram(d){
+    dstate = "gram"
+    return Math.abs(d.gram);
+}
+
+//Fuction that handles zooming into parent block of treemap and transitions
+function zoom(d) {
+  var kx = w / Math.abs(d.dx), ky = h / Math.abs(d.dy);
+  x.domain([d.x, d.x + Math.abs(d.dx)]);
+  y.domain([d.y, d.y + Math.abs(d.dy)]);
+
+  var t = svg.selectAll("g.cell").transition()
+      .duration(d3.event.altKey ? 7500 : 750)
+      .attr("transform", function(d) { return "translate(" + x(d.x) + "," + y(d.y) + ")"; });
+
+  t.select("rect")
+      .attr("width", function(d) { return kx * Math.abs(d.dx) - 2; })
+      .attr("height", function(d) { return ky * Math.abs(d.dy) - 2; })
+      .style("fill", function(d) {
+        if ( d.nyg < 0 && dstate == "nyg" || d.gram < 0 && dstate == "gram")
+          return "black";
+        else 
+          return color(d.parent.name); 
+      })
+
+  t.select("text")
+      .attr("x", function(d) { return kx * Math.abs(d.dx) / 2; })
+      .attr("y", function(d) { return ky * Math.abs(d.dy) / 2; })
+      .style("opacity", function(d) { return kx * Math.abs(d.dx) > d.w ? 1 : 0; });
+
+  node = d;
+  d3.event.stopPropagation();
+}
+
+    </script>
+  
+  <div id="tooltip" class="hidden">
+    <p><strong id="sector"></strong></p>
+    <p><span id="annual"></span></p>
+    <p><span id="eps"></span></p>
+    <p><span id="gram"></span></p>
+    <p><span id="nyg"></span></p>
+  </div>
+  
+  </body>
+</html>
